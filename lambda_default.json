@@ -7,7 +7,7 @@
   "role": "arn:…/service-role/bitflyer_data_getter_role",
   "timeout": 300,
   "memory": 128,
-  "requirements": ["tzlocal"],
+  "requirements": ["ccxt", "python-dateutil", "tzlocal"],
   "variables": {
     "TZ": "Asia/Tokyo"
   }
