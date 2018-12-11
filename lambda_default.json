@@ -9,6 +9,7 @@
   "memory": 128,
   "requirements": ["ccxt", "python-dateutil", "tzlocal"],
   "variables": {
-    "TZ": "Asia/Tokyo"
+    "TZ": "Asia/Tokyo",
+    "DISCORD_POST_URL": "https://discordapp.com/api/webhooks/…" // ローカルテスト時は、export コマンドで設定しておく
   }
 }

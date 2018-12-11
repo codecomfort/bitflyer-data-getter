@@ -2,13 +2,33 @@ import asyncio
 import ccxt.async_support as ccxta
 from datetime import datetime, timedelta
 from dateutil.parser import parse
+import json
+import logger
+import os
 from pprint import pprint
 from pytz import timezone
+import requests
 import time
 from tzlocal import get_localzone
 
 date_format = "%Y/%m/%d %H:%M"
 local_zone = get_localzone()
+discord_post_url = os.environ["DISCORD_POST_URL"]
+log = logger.Logger(__name__)
+
+
+def post_to_discord(message):
+
+    post_data = {
+        "content": message
+    }
+
+    try:
+        response = requests.post(discord_post_url, data=json.dumps(post_data),
+                                 headers={'Content-Type': "application/json"})
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        log.error('Request failed: {}'.format(e))
 
 
 async def public_get_trade_async(symbol, after=None, before=None):
@@ -25,7 +45,7 @@ async def public_get_trade_async(symbol, after=None, before=None):
     """
     bf = getattr(ccxta, "bitflyer")()
     try:
-        print(f'対象 id: {after} 〜 {before}')
+        # print(f'対象 id: {after} 〜 {before}')
         params = {
             "symbol": symbol,
             "count": 500,   # Max 500 件が仕様らしい
@@ -54,19 +74,21 @@ def lambda_handler(event, context):
             executions = loop.run_until_complete(
                 public_get_trade_async("BTC_JPY", before, after))
         except Exception as err:
-            pprint(err)
+            log.error(err)
+            dt = datetime.now(local_zone).strftime(date_format)
+            post_to_discord("[{}] エラーが発生したので停止します".format(dt))
             return
 
         if executions is None or len(executions) == 0:
-            pprint(f'約定データなし: {before} 〜 {after}')
+            log.info('約定データなし： {} 〜 {}'.format(before, after))
             continue
 
         for execution in executions:
             native_time = parse(execution["exec_date"])
             utc = timezone("UTC").localize(native_time)
             jst = utc.astimezone(local_zone)
-            print(
-                f'execution id: {execution["id"]}, date: {jst.strftime(date_format)}')
+            log.info('execution id: {}, date: {}'.format(
+                execution["id"], jst.strftime(date_format)))
 
         before = after + 1
         after = after + step
