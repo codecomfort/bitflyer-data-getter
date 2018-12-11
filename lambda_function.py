@@ -31,26 +31,32 @@ def post_to_discord(message):
         log.error('Request failed: {}'.format(e))
 
 
-async def public_get_trade_async(symbol, after=None, before=None):
+async def public_get_trade_async(symbol, from_=None, to=None, max_count=500):
     """
+    max_count の最大は 500(bf 約定履歴取得 api の仕様)
+
     約定履歴
     https://lightning.bitflyer.com/docs?lang=ja#%E7%B4%84%E5%AE%9A%E5%B1%A5%E6%AD%B4
 
-    symbol の指定はマーケットの一覧から
+    symbol の指定はマーケットの一覧を参照
     https://lightning.bitflyer.com/docs?lang=ja#%E3%83%9E%E3%83%BC%E3%82%B1%E3%83%83%E3%83%88%E3%81%AE%E4%B8%80%E8%A6%A7
     "BTC_JPY" とか、"FX_BTC_JPY" とか
 
-    count, before, after の指定はページ形式から
+    count, after, before の指定はページ形式を参照
     https://lightning.bitflyer.com/docs?lang=ja#%E3%83%9A%E3%83%BC%E3%82%B8%E5%BD%A2%E5%BC%8F
     """
+    if 500 < max_count:
+        max_count = 500
+
     bf = getattr(ccxta, "bitflyer")()
     try:
-        # print(f'対象 id: {after} 〜 {before}')
+        print(f'対象 id: {from_} 〜 {to}')
+        return
         params = {
             "symbol": symbol,
-            "count": 500,   # Max 500 件が仕様らしい
-            "after": after - 1,  # 同値は含まないので調整
-            "before": before + 1,  # 同値は含まないので調整
+            "count": max_count,
+            "after": from_ - 1,  # 同値は含まないので調整
+            "before": to + 1,  # 同値は含まないので調整
         }
         executions = await bf.public_get_getexecutions(params)
         return executions
@@ -61,18 +67,32 @@ async def public_get_trade_async(symbol, after=None, before=None):
 # 名前は Lambda の設定名に合わせる
 
 
+def get_next_range(curr_to, step, last):
+    next_from = curr_to + 1
+    next_to = curr_to + step
+    if last < next_to:
+        next_to = last
+
+    return next_from, next_to
+
+
 def lambda_handler(event, context):
 
-    before = 0
-    after = 9
-    step = 10
+    first = event["first"]
+    last = event["last"]
+    step = event["step"]
+    symbol = event["symbol"]
+
+    from_, to = get_next_range(first - 1, step, last)
+
     interval_sec = 3
     while True:
+
         executions = []
         loop = asyncio.get_event_loop()
         try:
             executions = loop.run_until_complete(
-                public_get_trade_async("BTC_JPY", before, after))
+                public_get_trade_async(symbol, from_, to, step))
         except Exception as err:
             log.error(err)
             dt = datetime.now(local_zone).strftime(date_format)
@@ -80,24 +100,29 @@ def lambda_handler(event, context):
             return
 
         if executions is None or len(executions) == 0:
-            log.info('約定データなし： {} 〜 {}'.format(before, after))
-            continue
+            log.info('約定データなし： {} 〜 {}'.format(from_, to))
+        else:
+            for execution in executions:
+                native_time = parse(execution["exec_date"])
+                utc = timezone("UTC").localize(native_time)
+                jst = utc.astimezone(local_zone)
+                log.info('execution id: {}, date: {}'.format(
+                    execution["id"], jst.strftime(date_format)))
 
-        for execution in executions:
-            native_time = parse(execution["exec_date"])
-            utc = timezone("UTC").localize(native_time)
-            jst = utc.astimezone(local_zone)
-            log.info('execution id: {}, date: {}'.format(
-                execution["id"], jst.strftime(date_format)))
+        from_, to = get_next_range(to, step, last)
 
-        before = after + 1
-        after = after + step
-
-        if after > 30:
+        if last < from_:
+            log.info('first: {}, last: {} completed'.format(first, last))
             return
 
         time.sleep(interval_sec)
 
 
 if __name__ == '__main__':
-    lambda_handler(None, None)
+    event = {
+        "symbol": "BTC_JPY",
+        "first": 10001,
+        "last": 10500,
+        "step": 500
+    }
+    lambda_handler(event, None)
