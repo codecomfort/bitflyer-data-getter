@@ -64,8 +64,6 @@ async def public_get_trade_async(symbol, from_=None, to=None, max_count=500):
         if bf:
             await bf.close()
 
-# 名前は Lambda の設定名に合わせる
-
 
 def get_next_range(curr_to, step, last):
     next_from = curr_to + 1
@@ -76,6 +74,7 @@ def get_next_range(curr_to, step, last):
     return next_from, next_to
 
 
+# 名前は Lambda の設定名に合わせる
 def lambda_handler(event, context):
 
     first = event["first"]
@@ -112,8 +111,9 @@ def lambda_handler(event, context):
         from_, to = get_next_range(to, step, last)
 
         if last < from_:
-            log.info('first: {}, last: {} completed'.format(first, last))
-            return
+            msg = 'first: {}, last: {} completed'.format(first, last)
+            log.info(msg)
+            return msg
 
         time.sleep(interval_sec)
 
