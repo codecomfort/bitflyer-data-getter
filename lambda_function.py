@@ -4,6 +4,7 @@ from botocore.exceptions import ClientError
 import ccxt.async_support as ccxta
 from datetime import datetime, timedelta
 from dateutil.parser import parse
+from exceptions import GetExecutionsError, PutS3Error
 import json
 import logger
 import os
@@ -98,7 +99,7 @@ def lambda_handler(event, context):
             dt = datetime.now(local_zone).strftime(date_format)
             msg = "[{}] エラーが発生したので停止します".format(dt)
             post_to_discord(msg)
-            return msg
+            raise GetExecutionsError(msg)
 
         if executions is None or len(executions) == 0:
             log.info('約定データなし： {} 〜 {}'.format(from_, to))
@@ -116,7 +117,7 @@ def lambda_handler(event, context):
                 dt = datetime.now(local_zone).strftime(date_format)
                 msg = "[{}] エラーが発生したので停止します".format(dt)
                 post_to_discord(msg)
-                return msg
+                raise PutS3Error(msg)
 
         from_, to = get_next_range(to, step, last)
 
