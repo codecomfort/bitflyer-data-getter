@@ -111,7 +111,12 @@ def lambda_handler(event, context):
         from_, to = get_next_range(to, step, last)
 
         if last < from_:
-            msg = 'first: {}, last: {}, completed'.format(first, last)
+            msg = json.dumps({
+                "name": "bitflyer executions",
+                "first": first,
+                "last": last,
+                "state": "completed"
+            })
             log.info(msg)
             return msg
 
@@ -122,6 +127,6 @@ if __name__ == '__main__':
     event = {
         "symbol": "BTC_JPY",
         "first": 10001,
-        "last": 10500,
+        "last": 10003,
     }
     lambda_handler(event, None)
