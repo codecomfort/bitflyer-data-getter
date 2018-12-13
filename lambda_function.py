@@ -1,4 +1,6 @@
 import asyncio
+import boto3
+from botocore.exceptions import ClientError
 import ccxt.async_support as ccxta
 from datetime import datetime, timedelta
 from dateutil.parser import parse
@@ -51,12 +53,11 @@ async def public_get_trade_async(symbol, from_=None, to=None, max_count=500):
     bf = getattr(ccxta, "bitflyer")()
     try:
         print(f'対象 id: {from_} 〜 {to}')
-        return
         params = {
             "symbol": symbol,
             "count": max_count,
-            "after": from_ - 1,  # 同値は含まないので調整
-            "before": to + 1,  # 同値は含まないので調整
+            "after": from_ - 1 if from_ is not None else None,  # 同値は含まないので調整
+            "before": to + 1 if to is not None else None,  # 同値は含まないので調整
         }
         executions = await bf.public_get_getexecutions(params)
         return executions
@@ -95,18 +96,27 @@ def lambda_handler(event, context):
         except Exception as err:
             log.error(err)
             dt = datetime.now(local_zone).strftime(date_format)
-            post_to_discord("[{}] エラーが発生したので停止します".format(dt))
-            return
+            msg = "[{}] エラーが発生したので停止します".format(dt)
+            post_to_discord(msg)
+            return msg
 
         if executions is None or len(executions) == 0:
             log.info('約定データなし： {} 〜 {}'.format(from_, to))
         else:
-            for execution in executions:
-                native_time = parse(execution["exec_date"])
-                utc = timezone("UTC").localize(native_time)
-                jst = utc.astimezone(local_zone)
-                log.info('execution id: {}, date: {}'.format(
-                    execution["id"], jst.strftime(date_format)))
+            try:
+                s3_resource = boto3.resource("s3")
+                bucket_name = "bitflyer-executions"
+                key = '{:0>10}-{:0>10}'.format(executions[0]
+                                               ["id"], executions[-1]["id"])
+                obj = s3_resource.Object(bucket_name, key)
+                obj.put(Body=json.dumps(executions),
+                        ContentType="application/json")
+            except Exception as err:
+                log.error(err)
+                dt = datetime.now(local_zone).strftime(date_format)
+                msg = "[{}] エラーが発生したので停止します".format(dt)
+                post_to_discord(msg)
+                return msg
 
         from_, to = get_next_range(to, step, last)
 
