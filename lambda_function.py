@@ -79,8 +79,8 @@ def lambda_handler(event, context):
 
     first = event["first"]
     last = event["last"]
-    step = event["step"]
     symbol = event["symbol"]
+    step = 500
 
     from_, to = get_next_range(first - 1, step, last)
 
@@ -111,7 +111,7 @@ def lambda_handler(event, context):
         from_, to = get_next_range(to, step, last)
 
         if last < from_:
-            msg = 'first: {}, last: {} completed'.format(first, last)
+            msg = 'first: {}, last: {}, completed'.format(first, last)
             log.info(msg)
             return msg
 
@@ -123,6 +123,5 @@ if __name__ == '__main__':
         "symbol": "BTC_JPY",
         "first": 10001,
         "last": 10500,
-        "step": 500
     }
     lambda_handler(event, None)
