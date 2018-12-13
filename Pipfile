@@ -10,6 +10,7 @@ tzlocal = "*"
 ccxt = "*"
 python-dateutil = "*"
 boto3 = "*"
+requests = "*"
 
 [requires]
 python_version = "3.7"

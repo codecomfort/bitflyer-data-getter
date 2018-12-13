@@ -14,9 +14,10 @@ import requests
 import time
 from tzlocal import get_localzone
 
+bucket_name = "bitflyer-executions"
 date_format = "%Y/%m/%d %H:%M"
-local_zone = get_localzone()
 discord_post_url = os.environ["DISCORD_POST_URL"]
+local_zone = get_localzone()
 log = logger.Logger(__name__)
 
 
@@ -61,6 +62,11 @@ async def public_get_trade_async(symbol, from_=None, to=None, max_count=500):
             "before": to + 1 if to is not None else None,  # 同値は含まないので調整
         }
         executions = await bf.public_get_getexecutions(params)
+
+        if executions is None or len(executions) == 0:
+            log.info('約定データなし： {} 〜 {}'.format(from_, to))
+            executions = []
+
         return executions
     finally:
         if bf:
@@ -101,23 +107,18 @@ def lambda_handler(event, context):
             post_to_discord(msg)
             raise GetExecutionsError(msg)
 
-        if executions is None or len(executions) == 0:
-            log.info('約定データなし： {} 〜 {}'.format(from_, to))
-        else:
-            try:
-                s3_resource = boto3.resource("s3")
-                bucket_name = "bitflyer-executions"
-                key = '{:0>10}-{:0>10}'.format(executions[0]
-                                               ["id"], executions[-1]["id"])
-                obj = s3_resource.Object(bucket_name, key)
-                obj.put(Body=json.dumps(executions),
-                        ContentType="application/json")
-            except Exception as err:
-                log.error(err)
-                dt = datetime.now(local_zone).strftime(date_format)
-                msg = "[{}] エラーが発生したので停止します".format(dt)
-                post_to_discord(msg)
-                raise PutS3Error(msg)
+        key = '{:0>10}-{:0>10}'.format(from_, to)
+        try:
+            s3_resource = boto3.resource("s3")
+            obj = s3_resource.Object(bucket_name, key)
+            obj.put(Body=json.dumps(executions),
+                    ContentType="application/json")
+        except Exception as err:
+            log.error(err)
+            dt = datetime.now(local_zone).strftime(date_format)
+            msg = "[{}] エラーが発生したので停止します".format(dt)
+            post_to_discord(msg)
+            raise PutS3Error(msg)
 
         from_, to = get_next_range(to, step, last)
 
@@ -137,7 +138,7 @@ def lambda_handler(event, context):
 if __name__ == '__main__':
     event = {
         "symbol": "BTC_JPY",
-        "first": 10001,
-        "last": 10003,
+        "first": 76001,
+        "last": 76500,
     }
     lambda_handler(event, None)
