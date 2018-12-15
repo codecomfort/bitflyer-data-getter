@@ -88,11 +88,12 @@ def lambda_handler(event, context):
     first = event["first"]
     last = event["last"]
     symbol = event["symbol"]
+    invoke_next = event["invoke_next"]
     step = 500
 
     from_, to = get_next_range(first - 1, step, last)
 
-    interval_sec = 3
+    interval_sec = 5
     while True:
 
         executions = []
@@ -127,9 +128,11 @@ def lambda_handler(event, context):
                 "name": "bitflyer executions",
                 "first": first,
                 "last": last,
-                "state": "completed"
+                "state": "completed",
+                "invoke_next": invoke_next
             })
             log.info(msg)
+            post_to_discord(msg)
             return msg
 
         time.sleep(interval_sec)
@@ -138,7 +141,8 @@ def lambda_handler(event, context):
 if __name__ == '__main__':
     event = {
         "symbol": "BTC_JPY",
-        "first": 76001,
-        "last": 76500,
+        "first": 2002001,
+        "last": 2003000,
+        "invoke_next": "false"
     }
     lambda_handler(event, None)
