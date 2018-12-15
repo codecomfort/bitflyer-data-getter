@@ -54,7 +54,7 @@ async def public_get_trade_async(symbol, from_=None, to=None, max_count=500):
 
     bf = getattr(ccxta, "bitflyer")()
     try:
-        print(f'対象 id: {from_} 〜 {to}')
+        print(f'対象 id: {from_} 〜 {to} の取得を開始')
         params = {
             "symbol": symbol,
             "count": max_count,
@@ -94,6 +94,8 @@ def lambda_handler(event, context):
     from_, to = get_next_range(first - 1, step, last)
 
     interval_sec = 5
+    retry_chance = 3
+
     while True:
 
         executions = []
@@ -104,9 +106,18 @@ def lambda_handler(event, context):
         except Exception as err:
             log.error(err)
             dt = datetime.now(local_zone).strftime(date_format)
-            msg = "[{}] エラーが発生したので停止します".format(dt)
-            post_to_discord(msg)
-            raise GetExecutionsError(msg)
+
+            retry_chance = retry_chance - 1
+            if retry_chance < 0:
+                msg = "[{}] エラーが発生したので停止します".format(dt)
+                post_to_discord(msg)
+                raise GetExecutionsError(msg)
+            else:
+                msg = "[{}] エラーが発生しました。リトライします".format(dt)
+                post_to_discord(msg)
+                time.sleep(interval_sec)
+                continue
+
 
         key = '{:0>10}-{:0>10}'.format(from_, to)
         try:
@@ -141,8 +152,8 @@ def lambda_handler(event, context):
 if __name__ == '__main__':
     event = {
         "symbol": "BTC_JPY",
-        "first": 2002001,
-        "last": 2003000,
-        "invoke_next": "false"
+        "first": 3006501,
+        "last": 3007000,
+        "invoke_next": "false",
     }
     lambda_handler(event, None)
