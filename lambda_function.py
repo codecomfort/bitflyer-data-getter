@@ -21,6 +21,11 @@ local_zone = get_localzone()
 log = logger.Logger(__name__)
 
 
+def now():
+    dt = datetime.now(local_zone).strftime(date_format)
+    return dt
+
+
 def post_to_discord(message):
 
     post_data = {
@@ -32,7 +37,7 @@ def post_to_discord(message):
                                  headers={'Content-Type': "application/json"})
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
-        log.error('Request failed: {}'.format(e))
+        log.error(f'Request failed: {e}')
 
 
 async def public_get_trade_async(symbol, from_=None, to=None, max_count=500):
@@ -54,7 +59,7 @@ async def public_get_trade_async(symbol, from_=None, to=None, max_count=500):
 
     bf = getattr(ccxta, "bitflyer")()
     try:
-        print(f'対象 id: {from_} 〜 {to} の取得を開始')
+        # print(f'対象 id: {from_} 〜 {to} の取得を開始')
         params = {
             "symbol": symbol,
             "count": max_count,
@@ -64,7 +69,7 @@ async def public_get_trade_async(symbol, from_=None, to=None, max_count=500):
         executions = await bf.public_get_getexecutions(params)
 
         if executions is None or len(executions) == 0:
-            log.info('約定データなし： {} 〜 {}'.format(from_, to))
+            log.info(f'約定データなし： {from_} 〜 {to}')
             executions = []
 
         return executions
@@ -89,12 +94,16 @@ def lambda_handler(event, context):
     last = event["last"]
     symbol = event["symbol"]
     invoke_next = event["invoke_next"]
+
+    msg = f'[{now()}] Lambda が {first} 〜 {last} の取得を開始しました'
+    post_to_discord(msg)
+    msg_detail = f'{msg}'
+    log.info(msg_detail)
+
     step = 500
-
     from_, to = get_next_range(first - 1, step, last)
-
     interval_sec = 5
-    retry_chance = 3
+    get_retry_chance = 3
 
     while True:
 
@@ -104,37 +113,40 @@ def lambda_handler(event, context):
             executions = loop.run_until_complete(
                 public_get_trade_async(symbol, from_, to, step))
         except Exception as err:
-            log.error(err)
-            dt = datetime.now(local_zone).strftime(date_format)
-
-            retry_chance = retry_chance - 1
-            if retry_chance < 0:
-                msg = "[{}] エラーが発生したので停止します".format(dt)
+            get_retry_chance = get_retry_chance - 1
+            if get_retry_chance < 0:
+                msg = f'[{now()}] {from_} 〜 {to} の取得時にエラーが発生し、リトライでも失敗したので停止します'
                 post_to_discord(msg)
+                msg_detail = f'{msg} {err}'
+                log.error(msg_detail)
                 raise GetExecutionsError(msg)
             else:
-                msg = "[{}] エラーが発生しました。リトライします".format(dt)
+                msg = f'[{now()}] {from_} 〜 {to} の取得時にエラーが発生しました。リトライします'
                 post_to_discord(msg)
+                msg_detail = f'{msg} {err}'
+                log.error(msg_detail)
+
                 time.sleep(interval_sec)
                 continue
 
-
-        key = '{:0>10}-{:0>10}'.format(from_, to)
+        key = f'{from_:0>10}-{to:0>10}'
         try:
             s3_resource = boto3.resource("s3")
             obj = s3_resource.Object(bucket_name, key)
             obj.put(Body=json.dumps(executions),
                     ContentType="application/json")
         except Exception as err:
-            log.error(err)
-            dt = datetime.now(local_zone).strftime(date_format)
-            msg = "[{}] エラーが発生したので停止します".format(dt)
+            msg = f'[{now()}] s3 保存時にエラーが発生したので停止します'
             post_to_discord(msg)
+            msg_detail = f'{msg} {err}'
+            log.error(msg_detail)
             raise PutS3Error(msg)
 
         from_, to = get_next_range(to, step, last)
+        get_retry_chance = 3
 
         if last < from_:
+            post_to_discord(f'[{now()}] Lambda が {first} 〜 {last} の取得を完了しました')
             msg = json.dumps({
                 "name": "bitflyer executions",
                 "first": first,
@@ -143,7 +155,6 @@ def lambda_handler(event, context):
                 "invoke_next": invoke_next
             })
             log.info(msg)
-            post_to_discord(msg)
             return msg
 
         time.sleep(interval_sec)
@@ -152,8 +163,8 @@ def lambda_handler(event, context):
 if __name__ == '__main__':
     event = {
         "symbol": "BTC_JPY",
-        "first": 3006501,
-        "last": 3007000,
+        "first": 3216501,
+        "last": 3226500,
         "invoke_next": "false",
     }
     lambda_handler(event, None)
