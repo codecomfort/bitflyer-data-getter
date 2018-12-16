@@ -9,8 +9,8 @@ verify_ssl = true
 tzlocal = "*"
 ccxt = "*"
 python-dateutil = "*"
-boto3 = "*"
 requests = "*"
+aioboto3 = "*"
 
 [requires]
 python_version = "3.7"
