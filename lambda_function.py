@@ -108,18 +108,19 @@ async def public_get_trade_async(symbol, from_=None, to=None, max_count=500, ret
                 await bf.close()
 
 
-async def put_to_s3(executions, key, retry_chance=0, retry_interval_sec=0):
+async def put_to_s3_async(executions, key, retry_chance=0, retry_interval_sec=0):
 
     try_count = 1
 
     while True:
         # for debug
         # await asyncio.sleep(2)
-        # print(f'put_to_s3 {key} の保存を開始')
+        # print(f'put_to_s3_async {key} の保存を開始')
         # return
 
         try:
-            print(f'put_to_s3 {key} の保存を開始({try_count}/{retry_chance} 回目)')
+            print(
+                f'put_to_s3_async {key} の保存を開始({try_count}/{retry_chance} 回目)')
             s3_resource = aioboto3.resource("s3", region_name="ap-northeast-1")
             obj = s3_resource.Object(bucket_name, key)
             await obj.put(Body=json.dumps(executions),
@@ -157,6 +158,17 @@ def get_next_range(curr_to, step, last):
     return next_from, next_to
 
 
+def get_next_range_list(curr_to, step, last, parallel):
+    list_ = []
+    prev_to = curr_to
+    for index in range(parallel):
+        from_, to = get_next_range(prev_to, step, last)
+        list_.append([from_, to])
+        prev_to = to
+
+    return list_
+
+
 # 名前は Lambda の設定名に合わせる
 def lambda_handler(event, context):
 
@@ -172,16 +184,10 @@ def lambda_handler(event, context):
     log.info(msg_detail)
 
     step = 500
-    from_0, to_0 = get_next_range(first - 1, step, last)
-    from_1, to_1 = get_next_range(to_0, step, last)
-    from_2, to_2 = get_next_range(to_1, step, last)
-    from_3, to_3 = get_next_range(to_2, step, last)
-    from_4, to_4 = get_next_range(to_3, step, last)
-    from_5, to_5 = get_next_range(to_4, step, last)
-    from_6, to_6 = get_next_range(to_5, step, last)
-    from_7, to_7 = get_next_range(to_6, step, last)
+    # 500 件/req * 20 req で一気に 5000 件とる
+    from_to_list = get_next_range_list(first - 1, step, last, 20)
 
-    interval_sec = 0.5
+    # interval_sec = 0.5
 
     while True:
 
@@ -189,24 +195,8 @@ def lambda_handler(event, context):
         loop = asyncio.get_event_loop()
 
         # 約定履歴取得
-        get_trade_tasks = [
-            public_get_trade_async(symbol, from_0, to_0,
-                                   step, retry_chance=3, retry_interval_sec=1),
-            public_get_trade_async(symbol, from_1, to_1,
-                                   step, retry_chance=3, retry_interval_sec=1),
-            public_get_trade_async(symbol, from_2, to_2,
-                                   step, retry_chance=3, retry_interval_sec=1),
-            public_get_trade_async(symbol, from_3, to_3,
-                                   step, retry_chance=3, retry_interval_sec=1),
-            public_get_trade_async(symbol, from_4, to_4,
-                                   step, retry_chance=3, retry_interval_sec=1),
-            public_get_trade_async(symbol, from_5, to_5,
-                                   step, retry_chance=3, retry_interval_sec=1),
-            public_get_trade_async(symbol, from_6, to_6,
-                                   step, retry_chance=3, retry_interval_sec=1),
-            public_get_trade_async(symbol, from_7, to_7,
-                                   step, retry_chance=3, retry_interval_sec=1),
-        ]
+        get_trade_tasks = [public_get_trade_async(
+            symbol, from_to[0], from_to[1], step, retry_chance=3, retry_interval_sec=1) for from_to in from_to_list]
 
         # リトライはそれぞれのタスクごとに行う
         # １つでもリトライ上限に達したらヤメて Lambda 自体失敗とする
@@ -217,33 +207,9 @@ def lambda_handler(event, context):
         print(f'get_trade_tasks: {time.time() - st}')
 
         # 約定履歴保存
-        key0 = f'{from_0:0>10}-{to_0:0>10}'
-        key1 = f'{from_1:0>10}-{to_1:0>10}'
-        key2 = f'{from_2:0>10}-{to_2:0>10}'
-        key3 = f'{from_3:0>10}-{to_3:0>10}'
-        key4 = f'{from_4:0>10}-{to_4:0>10}'
-        key5 = f'{from_5:0>10}-{to_5:0>10}'
-        key6 = f'{from_6:0>10}-{to_6:0>10}'
-        key7 = f'{from_7:0>10}-{to_7:0>10}'
-
-        put_to_s3_tasks = [
-            put_to_s3(get_trade_results[0], key0,
-                      retry_chance=1, retry_interval_sec=1),
-            put_to_s3(get_trade_results[1], key1,
-                      retry_chance=1, retry_interval_sec=1),
-            put_to_s3(get_trade_results[2], key2,
-                      retry_chance=1, retry_interval_sec=1),
-            put_to_s3(get_trade_results[3], key3,
-                      retry_chance=1, retry_interval_sec=1),
-            put_to_s3(get_trade_results[4], key4,
-                      retry_chance=1, retry_interval_sec=1),
-            put_to_s3(get_trade_results[5], key5,
-                      retry_chance=1, retry_interval_sec=1),
-            put_to_s3(get_trade_results[6], key6,
-                      retry_chance=1, retry_interval_sec=1),
-            put_to_s3(get_trade_results[7], key7,
-                      retry_chance=1, retry_interval_sec=1),
-        ]
+        keys = [f'{from_to[0]:0>10}-{from_to[1]:0>10}' for from_to in from_to_list]
+        put_to_s3_tasks = [put_to_s3_async(trades, key, retry_chance=1, retry_interval_sec=1)
+                           for key, trades in zip(keys, get_trade_results)]
 
         st = time.time()
         put_to_s3_results = loop.run_until_complete(
@@ -251,7 +217,7 @@ def lambda_handler(event, context):
         print(f'put_to_s3_tasks: {time.time() - st}')
 
         # 終了条件
-        if last <= to_0 or last <= to_1 or last <= to_2 or last <= to_3 or last <= to_4 or last <= to_5 or last <= to_6 or last <= to_7:
+        if any([last <= from_to[1] for from_to in from_to_list]):
             post_to_discord(
                 f'[{now()}] Lambda が {first} 〜 {last} の取得を完了しました')
             # print(f'[{now()}] Lambda が {first} 〜 {last} の取得を完了しました')
@@ -269,28 +235,30 @@ def lambda_handler(event, context):
         # IP アドレス毎に 60 sec で 500 回が上限
         #
         # いま、取得 1.5 sec(新エンドポイント)、保存 1.5 sec, インターバル 0 sec
-        # つまり、8 req/3 sec
-        # 60 sec なら 160 request = 80,000 件
-        # lambda 起動時間は max 300 sec(5 min)
-        # なので、launcher 側で 400,000 件くらいは理論上設定できるが、
-        # コケるとこの単位でやりなおしになる
+        # つまり取得＋保存＋インターバルで計 3 sec
+        # 20 パラレルなので 20 req/3 sec
+        # 60 sec なら 400 request = 200,000 件
+        # lambda 起動時間は 最大で 300 sec(5 min)
+        # なので、launcher 側で 1,000,000 件くらいは理論上設定できるが、
+        # 少しでも遅延したら Lambda 自体タイムアウトになって全部やりなおしになる
+        # 700,000 件くらいで様子見か
+        # ↓
+        # 時間帯によるのか並列数によるのか、取得 3 sec, 保存 4 sec になってて
+        # Lambda タイムアウト時点でも 400,000 くらいしか取れてない
+        # 取得 3.5 sec(新エンドポイント)、保存 4.5 sec, インターバル 0 sec
+        # 20 req/7 sec、60 sec なら 171 request = 85,500 件
+        # 8 パラの場合と変わらないパフォーマンスに
+        #
 
         # 次の初期化
-        from_0, to_0 = get_next_range(to_7, step, last)
-        from_1, to_1 = get_next_range(to_0, step, last)
-        from_2, to_2 = get_next_range(to_1, step, last)
-        from_3, to_3 = get_next_range(to_2, step, last)
-        from_4, to_4 = get_next_range(to_3, step, last)
-        from_5, to_5 = get_next_range(to_4, step, last)
-        from_6, to_6 = get_next_range(to_5, step, last)
-        from_7, to_7 = get_next_range(to_6, step, last)
+        from_to_list = get_next_range_list(from_to_list[-1][1], step, last, 20)
 
 
 if __name__ == '__main__':
     event = {
         "symbol": "BTC_JPY",
-        "first": 100001,
-        "last": 1000000,
+        "first": 10001,
+        "last": 100000,
         "invoke_next": "false",
     }
     lambda_handler(event, None)
