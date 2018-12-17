@@ -163,9 +163,11 @@ def get_next_range(curr_to, step, last):
 def get_next_range_list(curr_to, step, last, parallel):
     list_ = []
     prev_to = curr_to
-    for index in range(parallel):
+    for _ in range(parallel):
         from_, to = get_next_range(prev_to, step, last)
         list_.append([from_, to])
+        if last <= to:
+            break
         prev_to = to
 
     return list_
@@ -186,8 +188,9 @@ def lambda_handler(event, context):
     log.info(msg_detail)
 
     step = 500
+    parallel = 20
     # 500 件/req * 20 req で一気に 5000 件とる
-    from_to_list = get_next_range_list(first - 1, step, last, 20)
+    from_to_list = get_next_range_list(first - 1, step, last, parallel)
 
     # interval_sec = 0.5
 
@@ -254,7 +257,8 @@ def lambda_handler(event, context):
         # uvloop 導入で、取得は 3.5 sec から 2.8 sec になった感はある
 
         # 次の初期化
-        from_to_list = get_next_range_list(from_to_list[-1][1], step, last, 20)
+        from_to_list = get_next_range_list(
+            from_to_list[-1][1], step, last, parallel)
 
 
 if __name__ == '__main__':
