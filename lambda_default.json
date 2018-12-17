@@ -7,9 +7,18 @@
   "role": "arn:…/service-role/bitflyer_data_getter_role",
   "timeout": 300,
   "memory": 128,
-  "requirements": ["ccxt", "python-dateutil", "tzlocal"],
+  "requirements": [
+    "aioboto3",
+    "ccxt",
+    "python-dateutil",
+    "requests",
+    "tzlocal",
+    "uvloop"
+  ],
   "variables": {
+    // ローカルテスト時は、ターミナル内で環境変数を export コマンドなどで設定しておく
     "TZ": "Asia/Tokyo",
-    "DISCORD_POST_URL": "https://discordapp.com/api/webhooks/…" // ローカルテスト時は、export コマンドで設定しておく
+    "DISCORD_POST_URL": "https://discordapp.com/api/webhooks/…",
+    "S3_BUCKET_NAME": "保存する S3 バケット名"
   }
 }

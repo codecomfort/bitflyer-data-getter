@@ -16,7 +16,7 @@ import asyncio
 import uvloop
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
-bucket_name = "bitflyer-executions"
+bucket_name = os.environ["S3_BUCKET_NAME"]
 date_format = "%Y/%m/%d %H:%M"
 discord_post_url = os.environ["DISCORD_POST_URL"]
 local_zone = get_localzone()
