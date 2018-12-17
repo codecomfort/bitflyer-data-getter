@@ -98,7 +98,7 @@ async def public_get_trade_async(symbol, from_=None, to=None, max_count=500, ret
                 raise GetExecutionsError(msg_detail)
             else:
                 msg = f'[{now()}] {from_} 〜 {to} の取得時にエラーが発生しました({type(err)})。リトライします'
-                post_to_discord(msg)
+                # post_to_discord(msg)
 
                 msg_detail = f'{msg} {type(err)} {err}'
                 log.error(msg_detail)
@@ -139,7 +139,7 @@ async def put_to_s3_async(executions, key, retry_chance=0, retry_interval_sec=0)
                 raise PutS3Error(msg_detail)
             else:
                 msg = f'[{now()}] {key} の保存時にエラーが発生しました({type(err)})。リトライします'
-                post_to_discord(msg)
+                # post_to_discord(msg)
 
                 msg_detail = f'{msg} {type(err)} {err}'
                 log.error(msg_detail)
