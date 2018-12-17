@@ -13,6 +13,8 @@ import ccxt.async_support as ccxta
 from botocore.exceptions import ClientError
 import aioboto3
 import asyncio
+import uvloop
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 bucket_name = "bitflyer-executions"
 date_format = "%Y/%m/%d %H:%M"
@@ -248,7 +250,8 @@ def lambda_handler(event, context):
         # 取得 3.5 sec(新エンドポイント)、保存 4.5 sec, インターバル 0 sec
         # 20 req/7 sec、60 sec なら 171 request = 85,500 件
         # 8 パラの場合と変わらないパフォーマンスに
-        #
+        # ↓
+        # uvloop 導入で、取得は 3.5 sec から 2.8 sec になった感はある
 
         # 次の初期化
         from_to_list = get_next_range_list(from_to_list[-1][1], step, last, 20)

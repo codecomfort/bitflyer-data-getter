@@ -11,6 +11,7 @@ ccxt = "*"
 python-dateutil = "*"
 requests = "*"
 aioboto3 = "*"
+uvloop = "*"
 
 [requires]
 python_version = "3.7"
