@@ -18,7 +18,7 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 bucket_name = os.environ["S3_BUCKET_NAME"]
 date_format = "%Y/%m/%d %H:%M"
-discord_post_url = os.environ["DISCORD_POST_URL"]
+discord_post_url = os.environ.get("DISCORD_POST_URL")
 local_zone = get_localzone()
 log = logger.Logger(__name__)
 
@@ -29,6 +29,8 @@ def now():
 
 
 def post_to_discord(message):
+    if discord_post_url is None:
+        return
 
     post_data = {
         "content": message
@@ -262,10 +264,12 @@ def lambda_handler(event, context):
 
 
 if __name__ == '__main__':
+    # 最新の id は以下のように確認可能
+    # https://api.bitflyer.com/v1/getexecutions?count=1
     event = {
         "symbol": "BTC_JPY",
-        "first": 10001,
-        "last": 100000,
+        "first": 657569720,
+        "last": 657569723,
         "invoke_next": "false",
     }
     lambda_handler(event, None)
