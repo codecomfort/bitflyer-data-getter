@@ -191,10 +191,8 @@ def lambda_handler(event, context):
 
     step = 500
     parallel = 20
-    # 500 件/req * 20 req で一気に 5000 件とる
+    # 500 件/req * 20 req で一気に 10000 件とる
     from_to_list = get_next_range_list(first - 1, step, last, parallel)
-
-    # interval_sec = 0.5
 
     while True:
 
@@ -237,26 +235,6 @@ def lambda_handler(event, context):
             })
             log.info(msg)
             return msg
-
-        # api 制限対策
-        # IP アドレス毎に 60 sec で 500 回が上限
-        #
-        # いま、取得 1.5 sec(新エンドポイント)、保存 1.5 sec, インターバル 0 sec
-        # つまり取得＋保存＋インターバルで計 3 sec
-        # 20 パラレルなので 20 req/3 sec
-        # 60 sec なら 400 request = 200,000 件
-        # lambda 起動時間は 最大で 300 sec(5 min)
-        # なので、launcher 側で 1,000,000 件くらいは理論上設定できるが、
-        # 少しでも遅延したら Lambda 自体タイムアウトになって全部やりなおしになる
-        # 700,000 件くらいで様子見か
-        # ↓
-        # 時間帯によるのか並列数によるのか、取得 3 sec, 保存 4 sec になってて
-        # Lambda タイムアウト時点でも 400,000 くらいしか取れてない
-        # 取得 3.5 sec(新エンドポイント)、保存 4.5 sec, インターバル 0 sec
-        # 20 req/7 sec、60 sec なら 171 request = 85,500 件
-        # 8 パラの場合と変わらないパフォーマンスに
-        # ↓
-        # uvloop 導入で、取得は 3.5 sec から 2.8 sec になった感はある
 
         # 次の初期化
         from_to_list = get_next_range_list(
