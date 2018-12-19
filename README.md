@@ -12,9 +12,8 @@
 
 ## How to run(local)
 
-1. Set your environment variables
-    - export DISCORD_POST_URL="your discord webhooks address" (optional)
-    - export S3_BUCKER_NAME="your S3 bucket name"
+1. (optional)Set your environment variables
+    - export DISCORD_POST_URL="your discord webhooks address"
 
 2. Edit sample data in lambda_function.py
 

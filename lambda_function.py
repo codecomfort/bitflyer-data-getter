@@ -16,7 +16,6 @@ import asyncio
 import uvloop
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
-bucket_name = os.environ["S3_BUCKET_NAME"]
 date_format = "%Y/%m/%d %H:%M"
 discord_post_url = os.environ.get("DISCORD_POST_URL")
 local_zone = get_localzone()
@@ -112,7 +111,7 @@ async def public_get_trade_async(symbol, from_=None, to=None, max_count=500, ret
                 await bf.close()
 
 
-async def put_to_s3_async(executions, key, retry_chance=0, retry_interval_sec=0):
+async def put_to_s3_async(executions, key, bucket_name, retry_chance=0, retry_interval_sec=0):
 
     try_count = 1
 
@@ -182,6 +181,7 @@ def lambda_handler(event, context):
     last = event["last"]
     symbol = event["symbol"]
     invoke_next = event["invoke_next"]
+    bucket_name = event["bucket_name"]
 
     msg = f'[{now()}] Lambda が {first} 〜 {last} の取得を開始しました'
     post_to_discord(msg)
@@ -213,7 +213,7 @@ def lambda_handler(event, context):
 
         # 約定履歴保存
         keys = [f'{from_to[0]:0>10}-{from_to[1]:0>10}' for from_to in from_to_list]
-        put_to_s3_tasks = [put_to_s3_async(trades, key, retry_chance=1, retry_interval_sec=1)
+        put_to_s3_tasks = [put_to_s3_async(trades, key, bucket_name, retry_chance=1, retry_interval_sec=1)
                            for key, trades in zip(keys, get_trade_results)]
 
         st = time.time()
@@ -246,8 +246,9 @@ if __name__ == '__main__':
     # https://api.bitflyer.com/v1/getexecutions?count=1
     event = {
         "symbol": "BTC_JPY",
-        "first": 657569720,
-        "last": 657569723,
+        "first": 657569724,
+        "last": 657569727,
         "invoke_next": "false",
+        "bucket_name": "bitflyer-executions"
     }
     lambda_handler(event, None)
